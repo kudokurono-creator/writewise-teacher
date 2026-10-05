@@ -1,0 +1,13 @@
+* text=auto
+
+# Preserve binary documents and assets without line-ending conversion.
+*.pdf binary
+*.doc binary
+*.docx binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary

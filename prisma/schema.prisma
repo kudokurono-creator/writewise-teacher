@@ -1,0 +1,170 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+model User {
+  id String @id @default(cuid())
+  email String @unique
+  name String
+  passwordHash String
+  createdAt DateTime @default(now())
+  sessions Session[]
+  knowledgeBases KnowledgeBase[]
+  documents Document[]
+  lessonPlans LessonPlan[]
+  chatSessions ChatSession[]
+  reflections Reflection[]
+  aiLogs AIRequestLog[]
+}
+model Session {
+  id String @id
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  @@index([expiresAt])
+}
+model AuthAttempt {
+  id String @id @default(cuid())
+  key String
+  createdAt DateTime @default(now())
+  @@index([key, createdAt])
+}
+model KnowledgeBase {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name String
+  description String @default("")
+  category String @default("教学资料")
+  createdAt DateTime @default(now())
+  documents Document[]
+  @@index([userId, createdAt])
+}
+model Document {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  knowledgeBaseId String?
+  knowledgeBase KnowledgeBase? @relation(fields: [knowledgeBaseId], references: [id], onDelete: SetNull)
+  name String
+  type String
+  size Int
+  storageKey String
+  status String @default("PENDING")
+  error String?
+  text String @default("")
+  metadata Json @default("{}")
+  createdAt DateTime @default(now())
+  chunks DocumentChunk[]
+  lessonReferences LessonPlanReference[]
+  reflectionDocuments ReflectionDocument[]
+  @@index([userId, knowledgeBaseId])
+}
+model DocumentChunk {
+  id String @id @default(cuid())
+  documentId String
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  index Int
+  content String
+  embedding Float[]
+  embeddingModel String
+  @@unique([documentId, index])
+}
+model LessonPlan {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title String
+  basicInfo Json
+  analysis Json?
+  content Json?
+  status String @default("DRAFT")
+  currentVersion Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  versions LessonPlanVersion[]
+  references LessonPlanReference[]
+  reflections Reflection[]
+  chatSessions ChatSession[]
+  @@index([userId, updatedAt])
+}
+model LessonPlanVersion {
+  id String @id @default(cuid())
+  lessonPlanId String
+  lessonPlan LessonPlan @relation(fields: [lessonPlanId], references: [id], onDelete: Cascade)
+  number Int
+  content Json
+  changeDescription String
+  createdAt DateTime @default(now())
+  @@unique([lessonPlanId, number])
+}
+model LessonPlanReference {
+  lessonPlanId String
+  lessonPlan LessonPlan @relation(fields: [lessonPlanId], references: [id], onDelete: Cascade)
+  documentId String
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  @@id([lessonPlanId, documentId])
+}
+model ChatSession {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title String
+  lessonPlanId String?
+  lessonPlan LessonPlan? @relation(fields: [lessonPlanId], references: [id], onDelete: SetNull)
+  knowledgeBaseIds String[]
+  webSearch Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  messages ChatMessage[]
+  @@index([userId, updatedAt])
+  @@index([lessonPlanId])
+}
+model ChatMessage {
+  id String @id @default(cuid())
+  sessionId String
+  session ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role String
+  content String
+  structured Json?
+  createdAt DateTime @default(now())
+}
+model Reflection {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lessonPlanId String
+  lessonPlan LessonPlan @relation(fields: [lessonPlanId], references: [id], onDelete: Cascade)
+  title String
+  notes String
+  sourceVersion Int
+  sourceContent Json
+  report Json?
+  optimizedVersion Int?
+  createdAt DateTime @default(now())
+  documents ReflectionDocument[]
+  @@index([userId, createdAt])
+}
+model ReflectionDocument {
+  reflectionId String
+  reflection Reflection @relation(fields: [reflectionId], references: [id], onDelete: Cascade)
+  documentId String
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  @@id([reflectionId, documentId])
+}
+model AIRequestLog {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  feature String
+  model String
+  inputTokens Int @default(0)
+  outputTokens Int @default(0)
+  latency Int
+  status String
+  createdAt DateTime @default(now())
+  @@index([userId, createdAt])
+}

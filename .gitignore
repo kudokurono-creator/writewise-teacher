@@ -1,0 +1,18 @@
+node_modules/
+.next/
+.env
+.env.*
+!.env.example
+.data/
+storage/
+test-results/
+playwright-report/
+*.tsbuildinfo
+output/
+# Teacher reference files and local Office temporary files
+/资料/
+~$*
+*.tmp
+*.log
+.DS_Store
+Thumbs.db
