@@ -106,7 +106,7 @@ pnpm db:migrate
 pnpm db:seed
 ```
 
-Schema 包含 User、Session、KnowledgeBase、Document、DocumentChunk、ClassProfile、ClassProfileDocument、LessonPlan、LessonPlanVersion、LessonPlanReference、ChatSession、ChatMessage、Reflection、ReflectionDocument、AIRequestLog，以及认证限流记录。
+Schema 包含 User、Session、KnowledgeBase、Document、DocumentChunk、ClassProfile、LessonPlan、LessonPlanVersion、LessonPlanReference、ChatSession、ChatMessage、Reflection、ReflectionDocument、AIRequestLog，以及认证限流记录。
 
 从 v1.0.0 升级时执行 `pnpm db:migrate` 和 `pnpm db:generate`，应用班级档案与 canonical 教学设计的增量迁移。无需 reset 或重新运行 Seed；已有用户、知识库、教案和历史版本保留。
 
