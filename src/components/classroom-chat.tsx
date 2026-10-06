@@ -30,6 +30,7 @@ export function ClassroomChat({
   mock,
   course,
   lessons,
+  lessonOptions = [],
 }: {
   bases: { id: string; name: string }[];
   sessions: { id: string; title: string }[];
@@ -38,16 +39,21 @@ export function ClassroomChat({
     messages: ChatMessage[];
     baseIds: string[];
     webSearch: boolean;
+    currentLessonId?: string;
   };
   mock: boolean;
   course: { id: string; title: string } | null;
   lessons: { id: string; title: string }[];
+  lessonOptions?: { id: string; title: string }[];
 }) {
   const router = useRouter();
   const [navigating, startNavigation] = useTransition();
   const [sessionId, setSessionId] = useState(initial?.id);
   const [selected, setSelected] = useState(initial?.baseIds || []);
   const [webSearch, setWebSearch] = useState(initial?.webSearch || false);
+  const [currentLessonId, setCurrentLessonId] = useState(
+    initial?.currentLessonId || lessonOptions[0]?.id,
+  );
   const [messages, setMessages] = useState<ChatMessage[]>(
     initial?.messages || [],
   );
@@ -92,6 +98,7 @@ export function ClassroomChat({
           question: q,
           knowledgeBaseIds: selected,
           webSearch,
+          currentLessonId,
         }),
       });
       if (!response.ok) {
@@ -157,6 +164,7 @@ export function ClassroomChat({
     setQuestion("");
     setSelected([]);
     setWebSearch(false);
+    setCurrentLessonId(lessonOptions[0]?.id);
   }
   function newChat() {
     resetConversation();
@@ -239,6 +247,23 @@ export function ClassroomChat({
             </option>
           ))}
         </select>
+        {lessonOptions.length > 1 ? (
+          <label className="field">
+            <span>当前课时</span>
+            <select
+              aria-label="当前课时"
+              value={currentLessonId}
+              disabled={locked}
+              onChange={(e) => setCurrentLessonId(e.target.value)}
+            >
+              {lessonOptions.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.title}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         <p className="muted">
           {course
             ? "回答将结合这份教学设计的最新目标、教学流程和教师要求。切换课程会开始新对话。"

@@ -59,17 +59,12 @@ test("MVP1 browser workflow plus classroom, reflection and responsive pages", as
     .getByRole("link", { name: "新建教学设计", exact: true })
     .first()
     .click();
-  await page.getByLabel("教学设计名称").fill("验收课：校园文化节邀请信");
-  await page
-    .getByLabel("写作主题")
-    .fill("An invitation to our English festival");
-  await page.getByLabel("班级", { exact: true }).fill("高二（3）班");
-  await page.getByRole("button", { name: "保存并选择资料" }).click();
+  await page.getByRole("button", { name: "下一步", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "让 AI 了解你的教材与学生" }),
+    page.getByRole("heading", { name: "教材与参考资料" }),
   ).toBeVisible();
   await page
-    .locator('input[type="file"]')
+    .getByLabel("上传教材文件")
     .setInputFiles([
       "tests/fixtures/student-profile.pdf",
       "output/student-reference.docx",
@@ -77,9 +72,13 @@ test("MVP1 browser workflow plus classroom, reflection and responsive pages", as
   await expect(page.getByText("已选择 2 份资料", { exact: true })).toBeVisible({
     timeout: 60000,
   });
+  await page.getByRole("button", { name: "下一步", exact: true }).click();
+  await page.getByLabel("本次教学范围").fill("P44–45 · Reading for Writing");
+  await page.getByRole("button", { name: "下一步", exact: true }).click();
+  await page.getByRole("button", { name: "下一步", exact: true }).click();
   await page.getByRole("button", { name: "开始教学分析", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "先确认教学分析" }),
+    page.getByRole("heading", { name: "AI 分析与确认" }),
   ).toBeVisible();
   await page
     .getByLabel("学情分析", { exact: true })
@@ -122,7 +121,9 @@ test("MVP1 browser workflow plus classroom, reflection and responsive pages", as
   await page.reload();
   await expect(page.locator(".editor-save-state")).toContainText("V4");
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: "导出 Word", exact: true }).click();
+  await page
+    .getByRole("button", { name: "下载英文 Word", exact: true })
+    .click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toMatch(/\.docx$/);
   await download.saveAs("output/verified-lesson.docx");

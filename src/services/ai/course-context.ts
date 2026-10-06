@@ -4,6 +4,7 @@ import {
   lessonContentSchema,
   type KnowledgeSource,
   type WebSource,
+  getLessons,
 } from "@/types/lesson";
 import { prompts } from "@/prompts";
 import type { Message } from "./types";
@@ -14,16 +15,21 @@ import {
   type ResponseRoute,
 } from "./response-policy";
 
-export function buildCourseContext(plan: {
-  id: string;
-  title: string;
-  basicInfo: unknown;
-  analysis: unknown;
-  content: unknown;
-}) {
+export function buildCourseContext(
+  plan: {
+    id: string;
+    title: string;
+    basicInfo: unknown;
+    analysis: unknown;
+    content: unknown;
+  },
+  currentLessonId?: string | null,
+) {
   const info = basicInfoSchema.parse(plan.basicInfo);
   const analysis = analysisSchema.safeParse(plan.analysis).data;
   const content = lessonContentSchema.safeParse(plan.content).data;
+  const lessons = content ? getLessons(content, info) : [];
+  const active = lessons.find((l) => l.id === currentLessonId) || lessons[0];
   // Read the saved, editable lesson every turn; never reuse a chat snapshot.
   return {
     lessonPlanId: plan.id,
@@ -42,12 +48,40 @@ export function buildCourseContext(plan: {
     ),
     focus: content?.focus ?? analysis?.focus,
     difficulties: content?.difficulties ?? analysis?.difficulties,
-    stages: content?.stages.map((s) => ({
+    currentLessonId: active?.id,
+    currentLessonTitle: active?.title,
+    currentLessonDuration: active?.duration,
+    lessonConnection: content?.lessonConnection,
+    lessons: lessons.map((l) => ({
+      id: l.id,
+      title: l.title,
+      duration: l.duration,
+      objectiveIds: l.objectiveIds,
+      objectives: l.objectives,
+      output: l.output,
+      stages: l.stages.map((s) => ({
+        name: s.name,
+        duration: s.duration,
+        activities: s.activities?.map((a) => ({
+          title: a.title,
+          objectiveIds: a.objectiveIds,
+          duration: a.duration,
+          evidence: a.evidence,
+          connection: a.connection,
+        })),
+      })),
+    })),
+    stages: (active?.stages || content?.stages)?.map((s) => ({
       name: s.name,
       duration: s.duration,
       teacherActivities: s.teacherActivities.slice(0, 800),
       studentActivities: s.studentActivities.slice(0, 800),
       purpose: s.purpose.slice(0, 500),
+      activities: s.activities?.map((a) => ({
+        ...a,
+        teacherActions: a.teacherActions.map((t) => t.slice(0, 800)),
+        studentActions: a.studentActions.map((t) => t.slice(0, 800)),
+      })),
     })),
     assessment: content?.assessment.slice(0, 2000),
   };
@@ -75,6 +109,12 @@ export function buildClassroomMessages(input: {
         写作主题: info.topic,
         写作类型: info.lessonType,
         课时时长: `${info.duration}分钟`,
+        当前课时: input.course!.currentLessonTitle,
+        当前课时时长: input.course!.currentLessonDuration,
+        各课时设计与产出: input.course!.lessons,
+        两课时衔接: input.course!.lessonConnection,
+        实际教学范围: info.teachingScope,
+        允许参考范围: info.referenceScope,
         教学目标: input.course!.objectives,
         教师原始目标要求: info.objectives,
         教学内容分析: input.course!.textbookAnalysis,

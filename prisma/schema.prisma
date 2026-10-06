@@ -18,6 +18,17 @@ model User {
   chatSessions ChatSession[]
   reflections Reflection[]
   aiLogs AIRequestLog[]
+  classProfiles ClassProfile[]
+}
+model ClassProfile {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name String
+  profile Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([userId, updatedAt])
 }
 model Session {
   id String @id
@@ -83,6 +94,9 @@ model LessonPlan {
   content Json?
   status String @default("DRAFT")
   currentVersion Int @default(0)
+  draftStep Int @default(1)
+  analysisConfirmed Boolean @default(false)
+  analysisConversation Json @default("[]")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   versions LessonPlanVersion[]
@@ -106,6 +120,8 @@ model LessonPlanReference {
   lessonPlan LessonPlan @relation(fields: [lessonPlanId], references: [id], onDelete: Cascade)
   documentId String
   document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  sourceType String @default("reference")
+  referenceType String @default("other")
   @@id([lessonPlanId, documentId])
 }
 model ChatSession {
@@ -117,6 +133,7 @@ model ChatSession {
   lessonPlan LessonPlan? @relation(fields: [lessonPlanId], references: [id], onDelete: SetNull)
   knowledgeBaseIds String[]
   webSearch Boolean @default(false)
+  currentLessonId String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   messages ChatMessage[]

@@ -21,6 +21,7 @@ export const chatInputSchema = z.object({
   question: z.string().trim().min(1).max(4000),
   knowledgeBaseIds: z.array(z.string()).max(10),
   webSearch: z.boolean(),
+  currentLessonId: z.string().min(1).optional(),
 });
 export async function classroomStream(
   userId: string,
@@ -58,7 +59,14 @@ export async function classroomStream(
         })
       : null;
     if (lessonPlanId && !plan) throw new AppError("教学设计不存在。", 404);
-    const course = plan ? buildCourseContext(plan) : null;
+    const requestedLesson = input.currentLessonId || existing?.currentLessonId;
+    const course = plan ? buildCourseContext(plan, requestedLesson) : null;
+    if (
+      requestedLesson &&
+      course?.lessons.length &&
+      !course.lessons.some((l) => l.id === requestedLesson)
+    )
+      throw new AppError("当前课时不属于这份教学设计。");
     const route = routeClassroomResponse(input.question);
     const [sources, webSources] = await Promise.all([
       retrieve(
@@ -82,6 +90,7 @@ export async function classroomStream(
           lessonPlanId,
           knowledgeBaseIds: input.knowledgeBaseIds,
           webSearch: input.webSearch,
+          currentLessonId: course?.currentLessonId || null,
         },
       }));
     await db.chatSession.update({
@@ -89,6 +98,7 @@ export async function classroomStream(
       data: {
         knowledgeBaseIds: input.knowledgeBaseIds,
         webSearch: input.webSearch,
+        currentLessonId: course?.currentLessonId || null,
         updatedAt: new Date(),
       },
     });
@@ -98,7 +108,7 @@ export async function classroomStream(
       answer:
         route.intent === "FACT"
           ? `【演示回答】${course ? `当前课程是${course.basicInfo.grade}“${course.basicInfo.title}”，写作主题为“${course.basicInfo.topic}”。` : ""}演示模型不能解答资料中的具体事实，请查看已关联资料或配置真实模型。`
-          : `【演示回答】${course ? `当前课程是${course.basicInfo.grade}“${course.basicInfo.title}”，${course.basicInfo.lessonType}，${course.basicInfo.duration}分钟。教学目标：${course.objectives.join("；")}。` : ""}关于“${input.question}”，建议先明确写作任务的读者、目的和主要信息，再引导学生从篇章结构与语言表达两方面分析。${sources.length ? "可在下方查看已关联的参考资料。" : "当前未关联可用的参考资料。"}${route.explainWebStatus && !input.webSearch ? "当前没有启用网络检索，无法提供本次实时核实的官方网页。" : ""}`,
+          : `【演示回答】${course ? `当前课程是${course.basicInfo.grade}“${course.basicInfo.title}”，${course.basicInfo.lessonType}，${course.currentLessonDuration || course.basicInfo.duration}分钟。${course.currentLessonTitle ? `当前课时：${course.currentLessonTitle}。` : ""}${course.lessonConnection ? `衔接：${course.lessonConnection.transition}。` : ""}教学目标：${course.objectives.join("；")}。` : ""}关于“${input.question}”，建议先明确写作任务的读者、目的和主要信息，再引导学生从篇章结构与语言表达两方面分析。${sources.length ? "可在下方查看已关联的参考资料。" : "当前未关联可用的参考资料。"}${route.explainWebStatus && !input.webSearch ? "当前没有启用网络检索，无法提供本次实时核实的官方网页。" : ""}`,
       teachingSuggestion:
         "先出示两份简短片段，让学生比较哪一份更符合交际目的，再邀请学生说明理由。把判断依据转化为三条可观察的写作标准。",
       examples: [

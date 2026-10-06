@@ -1,7 +1,11 @@
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { pageUser } from "@/lib/auth";
-import { basicInfoSchema, analysisSchema } from "@/types/lesson";
+import {
+  basicInfoSchema,
+  analysisSchema,
+  classProfileSchema,
+} from "@/types/lesson";
 import { isMockAI } from "@/services/ai/provider";
 import { PrepareWizard } from "@/components/prepare-wizard";
 export default async function NewPlan({
@@ -11,7 +15,7 @@ export default async function NewPlan({
 }) {
   const user = await pageUser();
   const { draft: id } = await searchParams;
-  const [documents, draft] = await Promise.all([
+  const [documents, draft, profiles] = await Promise.all([
     db.document.findMany({
       where: { userId: user.id },
       select: {
@@ -32,12 +36,20 @@ export default async function NewPlan({
           include: { references: true },
         })
       : Promise.resolve(null),
+    db.classProfile.findMany({
+      where: { userId: user.id },
+      orderBy: { updatedAt: "desc" },
+    }),
   ]);
   if (id && !draft) notFound();
   if (draft?.content) redirect(`/lesson-plans/${draft.id}`);
   return (
     <PrepareWizard
       mock={isMockAI()}
+      profiles={profiles.map((p) => ({
+        id: p.id,
+        profile: classProfileSchema.parse(p.profile),
+      }))}
       documents={documents.map((d) => ({
         ...d,
         createdAt: d.createdAt.toISOString(),
@@ -51,6 +63,16 @@ export default async function NewPlan({
                 ? analysisSchema.parse(draft.analysis)
                 : null,
               documentIds: draft.references.map((r) => r.documentId),
+              documentSelections: draft.references.map((r) => ({
+                documentId: r.documentId,
+                sourceType:
+                  r.sourceType === "textbook"
+                    ? ("textbook" as const)
+                    : ("reference" as const),
+                referenceType: r.referenceType,
+              })),
+              draftStep: draft.draftStep,
+              conversation: draft.analysisConversation,
             }
           : undefined
       }

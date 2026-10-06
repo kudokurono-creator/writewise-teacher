@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import type { BasicInfo, LessonContent } from "@/types/lesson";
+import { designView } from "@/lib/canonical-plan";
 import { request, fullDate } from "@/lib/utils";
 import { Button } from "./ui/button";
 import { Dialog } from "./ui/dialog";
@@ -57,6 +58,21 @@ export function LessonEditor({
   const [showHistory, setShowHistory] = useState(false);
   const [preview, setPreview] = useState<Version | null>(null);
   const [error, setError] = useState("");
+  const [language, setLanguage] = useState<"zh" | "en">("zh");
+  const [currentLessonId, setCurrentLessonId] = useState(
+    initialContent.lessons?.[0]?.id || "lesson-1",
+  );
+  const targets = [
+    ...(content.lessons || []).map((l, i) => ({
+      id: l.id,
+      name: `Lesson ${i + 1} · ${l.title}`,
+    })),
+    ...content.stages.flatMap((s) => [
+      { id: s.id, name: s.name },
+      ...(s.activities || []).map((a) => ({ id: a.id, name: `↳ ${a.title}` })),
+    ]),
+    ...Object.entries(sectionNames).map(([id, name]) => ({ id, name })),
+  ];
   const dirty = JSON.stringify(content) !== JSON.stringify(savedContent);
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
@@ -126,7 +142,7 @@ export function LessonEditor({
         { role: "user", text },
         {
           role: "assistant",
-          text: `已修改“${content.stages.find((s) => s.id === target)?.name || sectionNames[target as keyof typeof sectionNames]}”，保存为 V${result.number}。请检查改动是否符合课堂需要。`,
+          text: `已修改“${targets.find((t) => t.id === target)?.name || target}”，并同步英文版，保存为 V${result.number}。请检查改动是否符合课堂需要。`,
         },
       ]);
       setInstruction("");
@@ -145,9 +161,31 @@ export function LessonEditor({
       toast.success(`已恢复 V${v.number} 的内容，保存为 V${result.number}`);
     });
   }
-  async function download() {
+  async function translate() {
+    await operation("正在生成英文对应版本…", async () => {
+      await apply(
+        await request<{ number: number; content: LessonContent }>(
+          `/api/lesson-plans/${id}`,
+          { action: "translate", expectedVersion: version },
+        ),
+        "生成英文对应版本",
+      );
+      setLanguage("en");
+    });
+  }
+  async function download(exportLanguage: "zh" | "en" = "en") {
     await operation("正在生成 Word…", async () => {
-      const response = await fetch(`/api/lesson-plans/${id}/export`);
+      if (exportLanguage === "en" && !content.english)
+        await apply(
+          await request<{ number: number; content: LessonContent }>(
+            `/api/lesson-plans/${id}`,
+            { action: "translate", expectedVersion: version },
+          ),
+          "生成英文对应版本",
+        );
+      const response = await fetch(
+        `/api/lesson-plans/${id}/export?language=${exportLanguage}`,
+      );
       if (!response.ok) {
         const data = await response.json();
         throw new Error(data.error || "Word 导出失败");
@@ -156,7 +194,11 @@ export function LessonEditor({
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = `${info.title}.docx`;
+      const title =
+        exportLanguage === "en"
+          ? content.english?.displayInfo?.title || content.displayInfo?.title
+          : content.displayInfo?.title;
+      anchor.download = `${title || info.title}_${exportLanguage === "en" ? "English" : "中文版"}.docx`;
       anchor.click();
       setTimeout(() => URL.revokeObjectURL(url), 10000);
       toast.success("Word 文档已下载");
@@ -197,11 +239,11 @@ export function LessonEditor({
           </Button>
           <Button
             variant="outline"
-            onClick={download}
+            onClick={() => download()}
             disabled={!!busy || dirty}
           >
             <Download size={15} />
-            导出 Word
+            下载英文 Word
           </Button>
           <Button onClick={save} disabled={!!busy || !dirty}>
             <Save size={15} />
@@ -221,16 +263,55 @@ export function LessonEditor({
       ) : null}
       <div className="editor-layout">
         <div>
-          <LessonDocument
-            info={info}
-            content={content}
-            onChange={setContent}
-            disabled={!!busy}
-            onAITarget={(value) => {
-              setTarget(value);
-              document.getElementById("ai-instruction")?.focus();
-            }}
-          />
+          <div className="design-language-bar">
+            <div className="segmented-tabs" aria-label="教学设计语言">
+              <button
+                className={language === "zh" ? "selected" : ""}
+                onClick={() => setLanguage("zh")}
+              >
+                中文版
+              </button>
+              <button
+                className={language === "en" ? "selected" : ""}
+                onClick={() => setLanguage("en")}
+              >
+                English version
+              </button>
+            </div>
+            <p className="muted">
+              中文修改保存后同步英文版；Word 默认下载英文版。
+            </p>
+            <Button
+              variant="ghost"
+              onClick={() => download("zh")}
+              disabled={!!busy || dirty}
+            >
+              下载中文 Word
+            </Button>
+          </div>
+          {language === "en" && !content.english ? (
+            <div className="panel">
+              <p>这份历史教案还没有英文对应版本。</p>
+              <Button disabled={!!busy || dirty} onClick={translate}>
+                生成英文版
+              </Button>
+            </div>
+          ) : (
+            <LessonDocument
+              key={language}
+              initialLessonId={currentLessonId}
+              onLessonSelect={setCurrentLessonId}
+              info={info}
+              content={language === "en" ? designView(content, "en") : content}
+              language={language}
+              onChange={language === "zh" ? setContent : undefined}
+              disabled={!!busy}
+              onAITarget={(value) => {
+                setTarget(value);
+                document.getElementById("ai-instruction")?.focus();
+              }}
+            />
+          )}
         </div>
         <aside className="ai-panel">
           <header>
@@ -250,18 +331,11 @@ export function LessonEditor({
                   onChange={(e) => setTarget(e.target.value)}
                   aria-label="AI 修改范围"
                 >
-                  {content.stages.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
+                  {targets.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
                     </option>
                   ))}
-                  {Object.entries(sectionNames)
-                    .filter(([key]) => key !== "resources")
-                    .map(([key, name]) => (
-                      <option key={key} value={key}>
-                        {name}
-                      </option>
-                    ))}
                 </select>
               </label>
               <div className="quick-prompts">

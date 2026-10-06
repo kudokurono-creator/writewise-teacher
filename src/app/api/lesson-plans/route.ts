@@ -4,7 +4,9 @@ import { requireUser } from "@/lib/auth";
 import { db, json } from "@/lib/db";
 import { api } from "@/lib/errors";
 import { basicInfoSchema } from "@/types/lesson";
-import { referenceDocuments } from "@/services/documents/service";
+import { checkedSelections } from "@/services/documents/selection";
+import { documentSelectionSchema } from "@/types/canonical";
+import { resolveClassProfile } from "@/services/ai/class-profile";
 export const GET = api(async () => {
   const user = await requireUser();
   return NextResponse.json(
@@ -20,15 +22,27 @@ export const POST = api(async (request) => {
     .object({
       basicInfo: basicInfoSchema,
       documentIds: z.array(z.string()).max(15).default([]),
+      documentSelections: z.array(documentSelectionSchema).max(30).optional(),
+      draftStep: z.number().int().min(1).max(6).default(1),
     })
     .parse(await request.json());
-  const documents = await referenceDocuments(data.documentIds, user.id);
+  const selections = await checkedSelections(
+    data.documentSelections ||
+      data.documentIds.map((documentId) => ({
+        documentId,
+        sourceType: "reference" as const,
+        referenceType: "other" as const,
+      })),
+    user.id,
+  );
+  const info = await resolveClassProfile(data.basicInfo, user.id);
   const plan = await db.lessonPlan.create({
     data: {
       userId: user.id,
-      title: data.basicInfo.title,
-      basicInfo: json(data.basicInfo),
-      references: { create: documents.map((d) => ({ documentId: d.id })) },
+      title: info.title || "教学设计草稿",
+      basicInfo: json(info),
+      draftStep: data.draftStep,
+      references: { create: selections },
     },
   });
   return NextResponse.json({ id: plan.id }, { status: 201 });

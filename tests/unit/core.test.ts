@@ -24,6 +24,7 @@ import { exportLesson } from "@/services/export/docx";
 import { LocalStorageProvider } from "@/services/storage/provider";
 import { partialAnswer } from "@/lib/stream";
 import { hashPassword, verifyPassword } from "@/lib/auth";
+import { checkedDesignSchema } from "@/services/ai/lesson-plan";
 const info = {
   ...defaultBasic,
   title: "邀请信写作测试",
@@ -31,8 +32,18 @@ const info = {
 };
 afterEach(() => vi.unstubAllGlobals());
 describe("lesson contract", () => {
-  it("rejects missing required course fields", () => {
-    expect(basicInfoSchema.safeParse(defaultBasic).success).toBe(false);
+  it("accepts file-first drafts with optional title, textbook metadata and topic", () => {
+    expect(basicInfoSchema.safeParse(defaultBasic).success).toBe(true);
+    expect(
+      basicInfoSchema.safeParse({ ...defaultBasic, duration: 0 }).success,
+    ).toBe(false);
+    expect(
+      basicInfoSchema.safeParse({
+        ...defaultBasic,
+        duration: 45,
+        lessonDurations: [50],
+      }).success,
+    ).toBe(false);
   });
   it.each([20, 40, 45, 60, 90, 180])(
     "allocates exactly %i minutes",
@@ -172,6 +183,27 @@ describe("retrieval utilities", () => {
   });
 });
 describe("AI provider", () => {
+  it("serializes transformed input schemas and derives legacy stages from new lessons", async () => {
+    process.env.AI_BASE_URL = "https://model.test/v1";
+    process.env.AI_API_KEY = "test-key";
+    const modelContent = { ...sampleLesson(info), stages: undefined };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        Response.json({
+          choices: [{ message: { content: JSON.stringify(modelContent) } }],
+        }),
+      ),
+    );
+    const result = await new OpenAICompatibleProvider().generateStructured(
+      [{ role: "user", content: "Design the lesson" }],
+      checkedDesignSchema(info, true),
+    );
+    expect(result.data.stages).toEqual(
+      result.data.lessons!.flatMap((l) => l.stages),
+    );
+    expect(result.data.stages).toHaveLength(7);
+  });
   it("handles fenced JSON", () =>
     expect(parseJSON('```json\n{"ok":true}\n```')).toEqual({ ok: true }));
   it("repairs invalid structured output exactly once", async () => {

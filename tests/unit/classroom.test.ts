@@ -60,6 +60,7 @@ const info = {
   ...defaultBasic,
   title: "邀请信写作——文化节",
   topic: "An Invitation to Our School Cultural Festival",
+  lessonType: "应用文" as const,
   className: "高二（1）班",
   objectives: "教师原始目标",
   requirements: "最后8分钟独立写作与修改",

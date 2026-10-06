@@ -61,7 +61,7 @@ export class OpenAICompatibleProvider implements AIProvider {
   ): Promise<AIResult<T>> {
     const instruction: Message = {
       role: "system",
-      content: `输出匹配此 JSON Schema 的 JSON 对象：${JSON.stringify(z.toJSONSchema(schema))}`,
+      content: `输出匹配此 JSON Schema 的 JSON 对象：${JSON.stringify(z.toJSONSchema(schema, { io: "input" }))}`,
     };
     let conversation = [instruction, ...messages];
     let inputTokens = 0,
@@ -78,7 +78,7 @@ export class OpenAICompatibleProvider implements AIProvider {
           inputTokens,
           outputTokens,
         };
-      } catch {
+      } catch (error) {
         if (attempt === 1)
           throw new AppError(
             "模型返回格式校验失败，已自动修复一次。请重试。",
@@ -93,13 +93,58 @@ export class OpenAICompatibleProvider implements AIProvider {
           },
           {
             role: "user",
-            content:
-              "上一次响应不符合 JSON Schema，请修复所有字段和类型并重新返回完整 JSON 对象。",
+            content: `上一次响应未通过校验。${
+              error instanceof z.ZodError
+                ? error.issues
+                    .map((i) => `${i.path.join(".")}: ${i.message}`)
+                    .join("；")
+                    .slice(0, 3000)
+                : "JSON 格式无效"
+            }。请修复并重新返回完整 JSON 对象。`,
           },
         ];
       }
     }
     throw new AppError("生成失败。", 502);
+  }
+  async generateCandidate(
+    messages: Message[],
+    schema: z.ZodType,
+  ): Promise<AIResult<unknown>> {
+    const instruction: Message = {
+      role: "system",
+      content: `只输出匹配此 JSON Schema 的 JSON 对象：${JSON.stringify(z.toJSONSchema(schema, { io: "input" }))}`,
+    };
+    let conversation = [instruction, ...messages],
+      inputTokens = 0,
+      outputTokens = 0;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const body = await (await this.call(conversation, false, true)).json();
+      const content: unknown = body.choices?.[0]?.message?.content;
+      inputTokens += body.usage?.prompt_tokens ?? 0;
+      outputTokens += body.usage?.completion_tokens ?? 0;
+      if (typeof content !== "string")
+        throw new AppError("模型返回为空，请重试。", 502);
+      try {
+        return { data: parseJSON(content), inputTokens, outputTokens };
+      } catch {
+        if (attempt === 1)
+          throw new AppError(
+            "模型返回的 JSON 不完整，自动调整后仍无法读取。请重试；未覆盖已保存内容。",
+            502,
+          );
+        conversation = [
+          ...conversation,
+          { role: "assistant", content },
+          {
+            role: "user",
+            content:
+              "上一次JSON语法不完整。只修复引号、分隔符和缺少的闭合括号，保留所有已有字段、ID、数字和文本，不重新设计，不添加猜测内容；返回可解析JSON，缺失内容稍后按字段补齐。",
+          },
+        ];
+      }
+    }
+    throw new AppError("模型返回未完成。", 502);
   }
   async *streamChat(messages: Message[]) {
     const response = await this.call(messages, true);

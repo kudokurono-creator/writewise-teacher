@@ -22,6 +22,8 @@ export function FilePicker({
   baseId,
   uploadOnly = false,
   onUploaded,
+  purpose,
+  onAvailable,
 }: {
   initialDocuments?: FileRecord[];
   selected: string[];
@@ -29,6 +31,8 @@ export function FilePicker({
   baseId?: string;
   uploadOnly?: boolean;
   onUploaded?: () => void;
+  purpose?: "textbook" | "reference";
+  onAvailable?: (document: FileRecord) => void;
 }) {
   const [documents, setDocuments] = useState(initialDocuments);
   const [busy, setBusy] = useState(false);
@@ -47,6 +51,7 @@ export function FilePicker({
         if (baseId) form.set("knowledgeBaseId", baseId);
         const result = await request<FileRecord>("/api/documents", form);
         setDocuments((prev) => [result, ...prev]);
+        onAvailable?.(result);
         if (result.status === "READY") {
           added.push(result.id);
           toast.success(`${file.name} 已就绪`);
@@ -67,7 +72,12 @@ export function FilePicker({
         ? selected.filter((s) => s !== id)
         : [...selected, id],
     );
-  const visible = documents.filter((d) =>
+  const allDocuments = [
+    ...new Map(
+      [...initialDocuments, ...documents].map((d) => [d.id, d]),
+    ).values(),
+  ];
+  const visible = allDocuments.filter((d) =>
     tab === "knowledge"
       ? !!d.knowledgeBase
       : selected.includes(d.id) || !d.knowledgeBase,
@@ -82,7 +92,7 @@ export function FilePicker({
             className={tab === "upload" ? "selected" : ""}
           >
             <Upload size={16} />
-            上传参考资料
+            {purpose ? "本次上传" : "上传参考资料"}
           </button>
           <button
             type="button"
@@ -102,7 +112,9 @@ export function FilePicker({
             accept=".pdf,.docx,.txt,.md"
             multiple
             hidden
-            aria-label="上传参考文件"
+            aria-label={
+              purpose === "textbook" ? "上传教材文件" : "上传参考文件"
+            }
             onChange={(e) => e.target.files && upload(e.target.files)}
           />
           <div
@@ -121,7 +133,15 @@ export function FilePicker({
             <div className="upload-symbol">
               <Upload size={26} />
             </div>
-            <h3>{busy ? <Busy label={progress} /> : "上传你的教学参考资料"}</h3>
+            <h3>
+              {busy ? (
+                <Busy label={progress} />
+              ) : purpose === "textbook" ? (
+                "上传本次教材页或 Unit"
+              ) : (
+                "上传你的教学参考资料"
+              )}
+            </h3>
             <p>拖放文件到这里，或从电脑选择</p>
             <Button
               type="button"
@@ -157,8 +177,8 @@ export function FilePicker({
               <span className="file-name">
                 <b>{d.name}</b>
                 <small>
-                  {d.knowledgeBase?.name || "临时参考资料"} · {fileSize(d.size)}{" "}
-                  · {dateLabel(d.createdAt)}
+                  {d.knowledgeBase?.name || "本次上传"} · {fileSize(d.size)} ·{" "}
+                  {dateLabel(d.createdAt)}
                 </small>
                 {d.error ? (
                   <small className="error-text">{d.error}</small>

@@ -2,14 +2,19 @@
 
 面向高中英语教师的教学工作台。以课前备课、课中助教、课后复盘构成闭环，支持个人知识库、结构化教案、历史版本和真正的 Word 文档导出。
 
+当前版本：**v1.1.0 · 双语教学设计与分课时备课**。更新记录见 [CHANGELOG.md](CHANGELOG.md)，逐文件改动和验收说明见 [docs/course-design-upgrade.md](docs/course-design-upgrade.md)。
+
 ## 已实现功能
 
 - 注册、登录、登出，数据库会话与用户数据隔离。
-- 四步备课：课程信息 → 参考资料 → 可修改的教学分析 → 完整教案。
+- 六步备课：选择班级 → 教材与资料 → 教学范围 → 教学模式 → AI 分析与确认 → 生成教案；支持保存草稿和恢复当前步骤。
+- 教材与参考资料分别保存用途，支持班级学情、课程标准、教学案例和练习；教材版本与 Unit 可留空。
 - PDF、DOCX、TXT、Markdown 上传与统一文本解析。
-- 教学过程以阶段对象保存，支持逐阶段编辑；校验总课时和唯一阶段 ID。
+- 单课时和连续双课时按 lessons 数组保存，分析与教案通过课时 Tab 切换；第二课时使用第一课时产出，AI 对话可只修改选定课时。
+- 中文和英文从同一 canonical 结构渲染，共享课时、活动、时长、目标映射、清单和板书；英文采用受控文本翻译。
+- 教学过程采用 Activities / Teaching Aims 两列，包含 Step、Activity、编号课堂操作、问题与预期回应、支架、评价证据、独立计时作业和逐课时板书。
 - AI 修改指定字段或阶段，保留其余教案内容；每次保存、修改或恢复产生新版本。
-- Word 导出包含中文字体、标题层级、教学过程表格、重复表头和明确列宽。
+- 中文和英文均可下载 Word，默认下载英文版；保留模板与完整课时内容，支持跨页行和重复表头。
 - 多知识库，资料切块、Embedding 持久化、pgvector 检索与原文来源。
 - 课堂问答支持当前课程上下文、知识库多选、多轮对话和按问题类型控制回答长度；来源按文件合并，可展开引用、查看原文和下载。
 - 对话历史可逐条选择删除；删除当前对话后保留当前课程，手机端同样可操作。
@@ -101,7 +106,9 @@ pnpm db:migrate
 pnpm db:seed
 ```
 
-Schema 包含 User、Session、KnowledgeBase、Document、DocumentChunk、LessonPlan、LessonPlanVersion、LessonPlanReference、ChatSession、ChatMessage、Reflection、ReflectionDocument、AIRequestLog，以及认证限流记录。
+Schema 包含 User、Session、KnowledgeBase、Document、DocumentChunk、ClassProfile、ClassProfileDocument、LessonPlan、LessonPlanVersion、LessonPlanReference、ChatSession、ChatMessage、Reflection、ReflectionDocument、AIRequestLog，以及认证限流记录。
+
+从 v1.0.0 升级时执行 `pnpm db:migrate` 和 `pnpm db:generate`，应用班级档案与 canonical 教学设计的增量迁移。无需 reset 或重新运行 Seed；已有用户、知识库、教案和历史版本保留。
 
 ## AI 模型配置
 
@@ -116,7 +123,7 @@ AI_MODEL=your-low-cost-chat-model
 
 兼容 Provider 使用 `/chat/completions`，支持 JSON object 与 SSE 流式输出。豆包、DeepSeek、通义等需要使用其兼容 API 的地址、模型标识与账号密钥。业务服务只调用统一 `AIProvider`，新厂商可扩展实现而不修改页面。
 
-教学分析、教案、局部修改和复盘均进行 Zod 校验；结构错误时自动修复一次。教案生成还校验阶段总时长；失败不会写入无效版本。AI 请求日志保存功能、模型、耗时、状态和可用的 token 使用量，不保存密钥或完整 Prompt。流式请求未提供 usage 时 token 显示为 0，不应将其作为实际成本。
+教学分析、教案、局部修改和复盘均进行 Zod 校验。新教学设计先生成课时结构，再生成具体教学活动；硬校验检查每课时总时长、目标与资源引用、活动输入和资料用途，最多两轮只修复错误字段，保留正确内容和已有 ID。可解析 JSON 之前的语法修复最多一次。软校验以优化建议显示，不阻止查看和下载；失败不会写入无效版本。AI 请求日志保存功能、模型、耗时、状态和可用的 token 使用量，不保存密钥或完整 Prompt。流式请求未提供 usage 时 token 显示为 0，不应将其作为实际成本。
 
 ## Embedding 与 RAG
 
@@ -170,6 +177,8 @@ pnpm start
 浏览器与 API 测试需要开发数据库和独立测试用的 `pnpm dev` 同时运行，默认访问 `http://localhost:3000`。这些离线验收依赖模拟数据，需要在启动测试服务的终端显式设置 `AI_PROVIDER=mock`、`EMBEDDING_PROVIDER=mock`、`SEARCH_PROVIDER=mock`；不要对正在接入真实 API 的服务直接运行这套端到端测试。测试注册临时账号，结束后删除其数据库数据。测试下载和截图位于忽略的 `output` 目录。PDF 测试文件已保存在仓库，无需运行 Python 生成脚本。
 
 部署参见 [docs/deployment.md](docs/deployment.md)，验收范围与限制参见 [docs/verification.md](docs/verification.md)。
+
+v1.1.0 教学设计的 118 项单元测试、真实模型定向浏览器测试、双语 Word 分页检查及已知边界，详见 [教学设计改版验收](docs/course-design-upgrade.md)。真实模型验收应在独立数据库与测试服务运行，不与教师实际数据混用。
 
 ## 维护注意
 

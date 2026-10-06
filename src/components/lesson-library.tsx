@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Search, FileText, Clock3, Plus, NotebookPen } from "lucide-react";
-import type { BasicInfo } from "@/types/lesson";
+import { getLessonDurations, type BasicInfo } from "@/types/lesson";
 import { dateLabel } from "@/lib/utils";
 import { Button } from "./ui/button";
 import { EmptyState, Status } from "./shared";
@@ -43,7 +43,9 @@ export function LessonLibrary({
               <NotebookPen size={26} />
             </span>
             <h2>把教学思路整理成一堂写作课</h2>
-            <p>填写课程信息，选择参考资料，确认教学分析，再生成完整教案。</p>
+            <p>
+              选择班级与教材，明确教学范围和课时，确认分析后生成中英文教案。
+            </p>
           </div>
           <Button asChild>
             <Link href="/prepare/new">
@@ -109,7 +111,7 @@ export function LessonLibrary({
               <div className="lesson-card-bottom">
                 <span>
                   <Clock3 size={13} />
-                  {p.basicInfo.duration} 分钟
+                  {getLessonDurations(p.basicInfo).join(" + ")} 分钟
                 </span>
                 <span>
                   {p.currentVersion ? `V${p.currentVersion}` : "草稿"}

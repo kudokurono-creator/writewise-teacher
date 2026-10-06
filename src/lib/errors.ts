@@ -50,9 +50,30 @@ export function checkOrigin(request: Request) {
   const expected = new URL(process.env.APP_URL || request.url).origin;
   // Same-site cookies plus origin validation protect all authenticated mutations.
   const own = new URL(request.url).origin;
+  const localAlias = (trustedOrigin: string) => {
+    if (!origin || process.env.NODE_ENV === "production") return false;
+    try {
+      const source = new URL(origin);
+      const trusted = new URL(trustedOrigin);
+      const loopbackHosts = ["localhost", "127.0.0.1", "[::1]"];
+      return (
+        source.origin === origin &&
+        loopbackHosts.includes(source.hostname) &&
+        loopbackHosts.includes(trusted.hostname) &&
+        source.protocol === trusted.protocol &&
+        source.port === trusted.port
+      );
+    } catch {
+      return false;
+    }
+  };
   if (
     request.headers.get("sec-fetch-site") === "cross-site" ||
-    (origin && origin !== expected && origin !== own)
+    (origin &&
+      origin !== expected &&
+      origin !== own &&
+      !localAlias(expected) &&
+      !localAlias(own))
   )
     throw new AppError("请求来源不受信任。", 403);
 }

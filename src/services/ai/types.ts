@@ -16,6 +16,10 @@ export interface AIProvider {
     schema: z.ZodType<T>,
   ): Promise<AIResult<T>>;
   streamChat(messages: Message[]): AsyncIterable<string>;
+  generateCandidate?(
+    messages: Message[],
+    schema: z.ZodType,
+  ): Promise<AIResult<unknown>>;
 }
 export interface EmbeddingProvider {
   readonly model: string;

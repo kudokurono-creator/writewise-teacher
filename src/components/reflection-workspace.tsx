@@ -191,7 +191,7 @@ export function ReflectionWorkspace({
               rows={5}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="例如：学生漏写了活动地点；互评标准不够具体……"
+              placeholder="请按课时记录：Lesson 1 的学生表现与学习产出；Lesson 2 如何使用这些产出；各活动实际用时及需要改进的问题……"
               maxLength={12000}
             />
           </Field>
@@ -225,7 +225,10 @@ export function ReflectionWorkspace({
     </>
   );
 }
-const reportFields: { key: keyof ReflectionReport; name: string }[] = [
+const reportFields: {
+  key: Exclude<keyof ReflectionReport, "lessonReports" | "continuityAnalysis">;
+  name: string;
+}[] = [
   { key: "overall", name: "总体评价" },
   { key: "goalAchievement", name: "教学目标达成分析" },
   { key: "activityAnalysis", name: "教学活动有效性" },
@@ -330,23 +333,52 @@ export function ReflectionDetail({
       <div className="reflection-detail-layout">
         <div className="panel reflection-report">
           {report ? (
-            reportFields.map(({ key, name }, i) => (
-              <section key={key}>
-                <div className="report-section-heading">
-                  <span>{i + 1}</span>
-                  <h2>{name}</h2>
-                </div>
-                {Array.isArray(report[key]) ? (
+            <>
+              {report.lessonReports?.map((lesson, i) => (
+                <section key={lesson.lessonId}>
+                  <div className="report-section-heading">
+                    <span>{i + 1}</span>
+                    <h2>
+                      Lesson {i + 1} · {lesson.title}
+                    </h2>
+                  </div>
+                  <h3>目标与活动</h3>
+                  <p>{lesson.goalAchievement}</p>
+                  <p>{lesson.activityAnalysis}</p>
+                  <h3>时间与证据</h3>
+                  <p>{lesson.timeAllocation}</p>
+                  <p>{lesson.evidence}</p>
                   <ul>
-                    {(report[key] as string[]).map((item, index) => (
-                      <li key={index}>{item}</li>
+                    {lesson.suggestions.map((s, n) => (
+                      <li key={n}>{s}</li>
                     ))}
                   </ul>
-                ) : (
-                  <p>{report[key]}</p>
-                )}
-              </section>
-            ))
+                </section>
+              ))}
+              {report.continuityAnalysis ? (
+                <section>
+                  <h2>两课时衔接效果</h2>
+                  <p>{report.continuityAnalysis}</p>
+                </section>
+              ) : null}
+              {reportFields.map(({ key, name }, i) => (
+                <section key={key}>
+                  <div className="report-section-heading">
+                    <span>{i + 1}</span>
+                    <h2>{name}</h2>
+                  </div>
+                  {Array.isArray(report[key]) ? (
+                    <ul>
+                      {(report[key] as string[]).map((item, index) => (
+                        <li key={index}>{item}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>{report[key]}</p>
+                  )}
+                </section>
+              ))}
+            </>
           ) : (
             <EmptyState
               title="反馈已保存，开始教学分析"
